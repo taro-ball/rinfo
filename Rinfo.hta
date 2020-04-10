@@ -1,0 +1,419 @@
+   <HTML>
+   <HEAD>
+   <TITLE>Remote System Information Viewer by Pavel G.</TITLE>
+ <basefont face="Arial, Helvetica, sans-serif">
+   <HTA:APPLICATION
+        ID="oHTA"
+        APPLICATIONNAME="rinfo"
+        BORDER="thin"
+        BORDERSTYLE="normal"
+        CAPTION="yes"
+	ICON=""
+        MAXIMIZEBUTTON="yes"
+        MINIMIZEBUTTON="yes"
+        SHOWINTASKBAR="yes"
+        SINGLEINSTANCE="no"
+        SYSMENU="yes"
+        VERSION="1.40" />
+
+
+   <SCRIPT language="VBScript">
+
+
+'---------------- Run Ping
+	sub ping_it
+		
+		Set objShell = CreateObject("Wscript.Shell")
+		objShell.Run "cmd /k ping -a "& pc_name.value			
+	end Sub
+	
+
+'---------------- Shutdown dialog
+	sub shtdown_dlg
+		
+		Set objShell = CreateObject("Wscript.Shell")
+		objShell.Run "shutdown -i"			
+	end Sub
+	
+'---------------- Run WMIC
+
+	Sub wmic_software_list
+		Set objShell = CreateObject("Wscript.Shell")
+		objShell.Run "cmd /k ""wmic /node:" & pc_name.value&" product get name,version && wmic /node:"&pc_name.value&" product get name,version > " & pc_name.value & "_software_list.txt&& start " & pc_name.value & "_software_list.txt"""
+
+	End Sub 
+
+	'---------------- Run Computer management
+
+	Sub manage_it
+		Set objShell = CreateObject("Wscript.Shell")
+		objShell.Run "compmgmt.msc /computer=\\" & pc_name.value
+
+	End Sub 
+
+
+'---------------- Run PSexec
+	sub exe_it
+		
+		Set objShell = CreateObject("Wscript.Shell")
+		objShell.Run "cmd /k psexec \\"& pc_name.value	& " cmd.exe"
+	end sub
+
+
+
+'---------------- Kill application
+	function kill_app (id)
+	if MsgBox("Are you sure you want to kill process with id "&id&" on "& trim(pc_name.value), vbOKCancel, "Title")=1 then
+		Set objShell = CreateObject("Wscript.Shell")
+		objShell.Run "taskkill /s "&trim(pc_name.value)&" /pid " & id
+	end if
+	end function
+
+'---------------------Sleep
+Function Sleepy(strSeconds)
+'    Dim strCmd
+	Set objShell = CreateObject("Wscript.Shell")
+
+	strCmd = "%COMSPEC% /c ping -n " & strSeconds & " 127.0.0.1>nul"
+	objShell.Run strCmd,0,1
+
+End Function
+
+'---------------------FriendlyDate
+Function FriendlyDateTime(RawDate)
+	FriendlyDateTime = CDate(Left(RawDate, 4) & "/" & Mid(RawDate, 5, 2) & "/" & Mid(RawDate, 7, 2) & " " & Mid (RawDate, 9, 2) & ":" & Mid(RawDate, 11, 2) & ":" & Mid(RawDate, 13, 2))
+End Function
+
+Function FriendlyDate(RawDate)
+	FriendlyDate = CDate(Left(RawDate, 4) & "/" & Mid(RawDate, 5, 2) & "/" & Mid(RawDate, 7, 2) )
+End Function
+
+
+
+Function GetAddRemove(sComp)
+			  'Function credit to Torgeir Bakken
+			  Dim cnt, oReg, sBaseKey, iRC, aSubKeys
+			  Const HKLM = &H80000002 'HKEY_LOCAL_MACHINE
+			  Set oReg = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & sComp & "/root/default:StdRegProv")
+			  sBaseKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\"
+			  iRC = oReg.EnumKey(HKLM, sBaseKey, aSubKeys)
+			
+			  Dim sKey, sValue, sTmp, sVersion, sDateValue, sYr, sMth, sDay
+			
+			  For Each sKey In aSubKeys
+			    iRC = oReg.GetStringValue(HKLM, sBaseKey & sKey, "DisplayName", sValue)
+			    If iRC <> 0 Then
+			      oReg.GetStringValue HKLM, sBaseKey & sKey, "QuietDisplayName", sValue
+			    End If
+			    If sValue <> "" Then
+			      iRC = oReg.GetStringValue(HKLM, sBaseKey & sKey, "DisplayVersion", sVersion)
+			      If sVersion <> "" Then
+			        sValue = sValue & vbTab & "<font color=grey><b>Ver: " & sVersion & "</b></font>"
+			      Else
+			        sValue = sValue & vbTab
+			      End If
+				  iRC = oReg.GetStringValue(HKLM, sBaseKey & sKey, "InstallDate", sDateValue)
+			      If sDateValue <> "" Then
+			        sYr =  Left(sDateValue, 4)
+			        sMth = Mid(sDateValue, 5, 2)
+			        sDay = Right(sDateValue, 2)
+			        'some Registry entries have improper date format
+			        On Error Resume Next 
+			        sDateValue = DateSerial(sYr, sMth, sDay)
+			        On Error GoTo 0
+			        If sdateValue <> "" Then
+			          sValue = sValue & vbTab & "<font color=green>Installed: " & sDateValue & "</font>"
+					 End If
+			      End If
+			      sTmp = sTmp & sValue & vbcrlf & "<br>"
+			    cnt = cnt + 1
+			    End If
+			  Next
+			  sTmp = BubbleSort(sTmp)
+				'fin.InnerHTML = "<font color=black><b>Software list for " & strcomputer & " at " &Now&"<br><br>"
+				'fin.InnerHTML = fin.InnerHTML & "<table border='0' style='font-size: 12; color: navy' width='100%' id='psss'>"&strList&"</table>"
+				fin.InnerHTML = "<b>Total entries:" & cnt & " on " & pc_name.value & " - " & Now() & vbcrlf & vbcrlf & "</b><br>" & sTmp & "<br>"
+			End Function
+			
+			Function BubbleSort(sTmp)
+			  'cheapo bubble sort
+			  Dim aTmp, i, j, temp
+			  aTmp = Split(sTmp, vbcrlf)  
+			  For i = UBound(aTmp) - 1 To 0 Step -1
+			    For j = 0 to i - 1
+			      If LCase(aTmp(j)) > LCase(aTmp(j+1)) Then
+			        temp = aTmp(j + 1)
+			        aTmp(j + 1) = aTmp(j)
+			        aTmp(j) = temp
+			      End if
+			    Next
+			  Next
+			  BubbleSort = Join(aTmp, vbcrlf)
+			End Function
+	
+	function correctDate(sw_date)
+	If sw_date <> "" Then
+			Dim strNew
+			intYearCharacters = 4
+			intMonthDayCharacters = 2
+			intStart = 5
+
+			strNew = Left(sw_date, intYearCharacters)
+			strNew = strNew & "."
+			strNew = strNew & Mid(sw_date, intStart,intMonthDayCharacters)
+			strNew = strNew & "."
+			strNew = strNew & Right(sw_date, intMonthDayCharacters)
+			correctDate = strNew
+	End If
+	End Function
+
+'---------------- Sub to list remote PC's processes
+	sub list_pss ()
+		Dim objWMIService, objProcess, colProcess
+		Dim strComputer, strList
+
+		strcomputer=trim(pc_name.value)
+		Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
+
+
+		Set colProcess = objWMIService.ExecQuery ("Select * from Win32_Process")
+
+		For Each objProcess in colProcess
+			Return = objProcess.GetOwner(strNameOfUser)
+			strList = strList & "<tr title='" & objProcess.ExecutablePath & "'><td><a href='#' title='kill' onClick='kill_app(" & objProcess.processid & ")'>[kill] </a>" & objProcess.processid &"</td><td>" & objProcess.Name & "</td><td><font color='#666666'> [" & strNameOfUser & "]</font></td><td> " & "</td></tr>"
+
+		Next
+		fin.InnerHTML = "<font color=black><b>Process list for " &strcomputer& " at " & Now & "<br><br>"
+		fin.InnerHTML = fin.InnerHTML & "<table border='0' style='font-size: 12; color: navy' width='100%' id='psss'>" & strList & "</table>"
+	
+	end sub
+
+'---------------- Sub to list remote PC's information
+
+Sub pc_info
+	
+	strcomputer=trim(pc_name.value)
+	Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
+
+'Define constants
+'	Const wbemFlagReturnImm = &h10
+'	Const wbemFlagForward = &h20
+	Const HARD_DISK = 3
+
+'Query the WMI information of the computer
+
+'----------------List Mapped Network Drives
+	On Error Resume Next
+
+	Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2")
+
+	Set colItems = objWMIService.ExecQuery("Select * from Win32_MappedLogicalDisk")
+
+	NetworkDrives = "<font color=Maroon><b>Mapped Drives:</b><br>"
+	For Each objItem in colItems
+	'NetworkDrives = NetworkDrives & "File System: " & objItem.FileSystem
+	'NetworkDrives = NetworkDrives & "Free Space: " & objItem.FreeSpace
+	'NetworkDrives = NetworkDrives & "Maximum Component Length: " & objItem.MaximumComponentLength
+	NetworkDrives = NetworkDrives & "Drive <b>" & objItem.Name & "</b>(" & objItem.VolumeName & ")[" _
+		& "<a href='" & objItem.ProviderName & "' target='blank'>" & objItem.ProviderName & "</a>]<br>"
+	'NetworkDrives = NetworkDrives & "Session ID: " & objItem.SessionID
+	'NetworkDrives = NetworkDrives & "Size: " & objItem.Size
+	'NetworkDrives = NetworkDrives & "Volume Serial Number: " & objItem.VolumeSerialNumber
+	Next
+	NetworkDrives = NetworkDrives & "</font>"
+
+	
+'---------------- Get printers
+	prn_info2=""
+
+	Dim WshNetwork, objPrinter, intDrive, intNetLetter
+	Set WshNetwork = CreateObject("WScript.Network") 
+	Set objWMIService = GetObject("winmgmts:{impersonationLevel=impersonate}!\\" & strComputer & "\root\cimv2") 
+	Set colInstalledPrinters = objWMIService.ExecQuery("Select * from Win32_Printer") 
+	
+	For Each objPrinter in colInstalledPrinters 
+		prn_info2=prn_info2 &"Printer: "& objPrinter.Name & "<br>"
+	Next 
+
+	'added
+	Set objPrinter = WshNetwork.EnumPrinterConnections
+	If objPrinter.Count = 0 Then
+	WScript.Echo "No Printers Mapped "
+	else
+	For intDrive = 0 To (objPrinter.Count -1) Step 2
+		intNetLetter = IntNetLetter +1
+		printer = objPrinter.Item(intDrive) & objPrinter.Item(intDrive +1)
+		prn_info2=prn_info2 &"Port " & printer & "<br>"
+	Next
+	end if
+
+'----------------Query the OS properties
+	Set colSettings = objWMIService.ExecQuery ("Select * from Win32_OperatingSystem")
+	Set colOperatingSystems = objWMIService.ExecQuery   ("SELECT * FROM Win32_OperatingSystem")
+	For Each objOperatingSystem in colOperatingSystems
+	   
+	   RawInstallDate = objOperatingSystem.InstallDate
+	   InstallDate=FriendlyDate(RawInstallDate)
+	   OSArchitecture = objOperatingSystem.OSArchitecture
+	      
+	   OS = objOperatingSystem.Caption
+	   ServicePackVersion = objOperatingSystem.ServicePackMajorVersion & "." & objOperatingSystem.ServicePackMinorVersion
+	   RawBoot=objOperatingSystem.LastBootUpTime
+	   LastBoot = FriendlyDateTime(RawBoot)
+	Next
+	
+
+
+'----------------Get profile path
+	Const ssfPROFILE = &H28
+	Set oShell = CreateObject("Shell.Application")
+	strHome = oShell.NameSpace(ssfPROFILE).Self.Path
+	'strip it from drive name and user folder
+	arrNames = Split(strHome, "\")
+	intIndexLast = Ubound(arrNames)
+	HomeDrive=left (arrNames(0),1)
+	'generate a network path
+	strHomeFolder = "\\" & strComputer & "\" & HomeDrive & "$\"
+	for i=1 to intIndexLast-1
+		strHomeFolder=strHomeFolder & arrNames(i) & "\"
+	next
+	
+	
+'----------------Find out who is logged in on the computer and store the username
+	Set colComputer = objWMIService.ExecQuery ("Select * from Win32_ComputerSystem")
+	For Each objComputer in colComputer
+	'get computer name
+		CompName = objComputer.Name
+	'get user name
+		UserName = objComputer.UserName
+  	' Get name only (without domain)
+		UserNameOnly = UserName
+		   intIndex = InStr(UserName, "\")
+			If (intIndex > 0) And (Len(UserName) > intIndex) then
+			UserNameOnly = Mid(UserName, intIndex + 1)
+			End If
+	Next
+'----------------get domain CONTROLLER
+	
+	if (MoreCheckbox.Checked) then
+
+		Set objDomain = getObject("LDAP://rootDse")
+		DC = objDomain.Get("dnsHostName")
+	end if
+
+'----------------Get hard drive information
+
+	Set objWMIService = GetObject("winmgmts:" & "{impersonationLevel=impersonate}!\\" & strcomputer & "\root\cimv2")
+
+	Set colDisks = objWMIService.ExecQuery ("Select * from Win32_LogicalDisk Where DriveType = " & HARD_DISK & "")
+	Storage = "<b>Hard Drives:</b><br>"
+	For Each objDisk in colDisks
+		Storage= Storage & "<a href='\\"&strcomputer&"\"& left (objDisk.DeviceID,1) & "$' target='blank'>"&"\\"&strcomputer&"\"& left (objDisk.DeviceID,1)&"$ </a href> "& ( Round((objDisk.FreeSpace/1073741824),2) ) & " Gb Free<br>"  
+	Next
+
+
+	'-----------------------================Begin displaying the information================---------------------------'
+
+	info_span.InnerHTML = "<b>PC info for " & trim(pc_name.value) & " at " &Now& "</b><br><br>"
+
+	info_span.InnerHTML = info_span.InnerHTML &  "OS:        <b>" & OS & OSArchitecture & "</b>(Installed:" & InstallDate & ", SP " & ServicePackVersion &")<br>"
+	info_span.InnerHTML = info_span.InnerHTML & "Computer Name:        <b>" & CompName & "</b><br>"
+	info_span.InnerHTML = info_span.InnerHTML & "Last Boot:        <b>" & LastBoot & "</b><br>"
+	info_span.InnerHTML = info_span.InnerHTML &  "User Logged In:        <b>" & UserName & "</b>" & " [<a href='"& strHomeFolder & UserNameOnly & "' target='blank'>"& strHomeFolder & UserNameOnly & "</a href>] <br>"  & "<br>"
+	'-----------------------=====================Show Avanced info================--------------------------------------'
+		if (MoreCheckbox.Checked) then
+			info_span.InnerHTML = info_span.InnerHTML &  "<font color='blue'>Domain Controller: <b>"&  DC & "</font><br>"
+		end if
+
+	'Get IP address of the computer and display it in the window
+	Set IPConfigSet = objWMIService.ExecQuery ("Select * from Win32_NetworkAdapterConfiguration Where IPEnabled=TRUE")
+
+	a=0
+		For Each IPConfig in IPConfigSet
+				
+			If Not IsNull(IPConfig.IPAddress) and (a=0 or MoreCheckbox.Checked) Then
+				For i=LBound(IPConfig.IPAddress) to UBound(IPConfig.IPAddress)
+				info_span.InnerHTML = info_span.InnerHTML &  "<font color='black'>IP Address: <b>" & IPConfig.IPAddress(i) & "</b><br>"
+				info_span.InnerHTML = info_span.InnerHTML &  "<font color='black'>MAC address: <b>" & IPConfig.MACAddress & "</b><br>"
+
+					if MoreCheckbox.Checked then
+
+
+					info_span.InnerHTML = info_span.InnerHTML &  "<font color='black'>DHCP server("&IPConfig.DHCPEnabled&"):<b>" &IPConfig.DHCPServer(i) & "</b><br>"
+
+
+					If not IsNull(IPConfig.DNSServerSearchOrder) Then
+						info_span.InnerHTML = info_span.InnerHTML &  "<font color='black'>DNS servers: <b>" & Join(IPConfig.DNSServerSearchOrder,"; ") & "</b><br>"
+					end if
+					If not IsNull(IPConfig.WINSPrimaryServer) Then
+					info_span.InnerHTML = info_span.InnerHTML &  "<font color='black'>WINS server: <b>" & IPConfig.WINSPrimaryServer & "</b><br>"
+					end if
+									On Error Resume Next
+					If not IsNull(IPConfig.DefaultIPGateway(i))Then
+						info_span.InnerHTML = info_span.InnerHTML &  "<font color='black'>Default Gateway: <b>" & IPConfig.DefaultIPGateway(i) & "</b>"& "<br>"
+					end if
+
+					end if
+
+				info_span.InnerHTML = info_span.InnerHTML & "<br>"
+
+				Next
+			End If
+	a=1
+		Next
+
+
+
+
+	info_span.InnerHTML = info_span.InnerHTML
+	info_span.InnerHTML = info_span.InnerHTML &  Storage & "<br>"
+	info_span.InnerHTML = info_span.InnerHTML & NetworkDrives & "<br>"
+	info_span.InnerHTML = info_span.InnerHTML & "<b>Printers:</b><br>" & printer_info & prn_info2
+
+
+End Sub
+
+   </SCRIPT>
+
+   </HEAD>
+
+<BODY SCROLL="yes" onload="">
+
+		<span style='font-size: 12; color: black' id="comment">
+
+	<table border='1' style='font-size: 11' bordercolor='#3333bb' cellpadding='5' width='100%' id='Table3'>
+	<tr>
+		<td>
+			<INPUT TYPE=text SIZE="14" NAME="pc_name" value="" title="Enter host name or IP address">
+			<input type="button" value="ping" name="pingbtn" onClick="ping_it" title="Pings remote host with -a switch">
+			<input type="button" value="info" name="info" onClick="pc_info" title="Displays remote PC's information - name ip-address etc.">
+			<input type="checkbox"name="MoreCheckbox" value="1" title="Displays remote PC's advanced information"> more
+			
+		</td>
+		<td>
+		<input type="button" value="Software(Fast)" onClick="GetAddRemove(pc_name.value)" title="get software list using WMI and display in the script window">  
+		<input type="button" value="Software(WMIC)"  onClick="wmic_software_list" title="Displays list of installed progams using WMIC and saves it to file">
+		<input type="button" value="Processes" name="list_pss" onClick="list_pss" title="Displays list of proceses started on client PC, you will be able to kill processes remotely">
+		</td>
+	</tr>
+	<tr bgcolor='#ffffff'>
+		<td width='288' valign="top">		
+			<input type="button" value="PC.management" name="MgmtBtn" onClick="manage_it" title="Opens computer management snap-in">Opens computer management snap-in<br>
+			<input type="button" value="r.cmd" name="EXbtn" onClick="exe_it" title="Opens remote cmd using PSexec in context of current user">Opens remote cmd using PSexec in context of current user<br>
+			<input type="button" value="shtdown" name="ShtdwnBtn" onClick="shtdown_dlg" title="Opens remote restart/shutdown dialog">Opens remote restart/shutdown dialog
+			<hr>
+			<span style='font-size: 12; color: green' id="info_span">!pc info!</span>
+		</td>
+		<td >
+		<span style='font-size: 12; color: navy' id="fin">Press [Ctrl]+[F] for search<br></span>
+		</td>
+	</tr>
+
+		
+</table>
+<br><font color=red>While extracting remote host's installed software list the window may become unresponsive. Please be patient - it may take some time.</font>		
+<p>tested on windows XP/7/8/10</p>	
+	
+		
+	</BODY>
+</HTML>
